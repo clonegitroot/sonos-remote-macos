@@ -26,7 +26,11 @@ Requires macOS 14 or later on Apple silicon and a Mac on the same network as you
 
 To configure global shortcuts, open **… → Setup & Shortcuts** in the menu bar. Choose a modifier combination and a key for each action, or leave it **Off**. Shortcuts target the selected room or group and require no keyboard-monitoring permission.
 
-The app connects directly to speakers. It stores the last speaker address and selection in local preferences and copies favorite titles and descriptions into a local shared widget cache. The downloadable bundle carries no speaker settings, favorite cache, or Sonos credentials.
+## Network and privacy
+
+The menu bar app, desktop widgets, and keyboard shortcuts control your speakers directly over your local network. They don’t use the Sonos cloud API or the Codex Sonos connection. Your Mac needs to be able to reach the speakers locally. Internet streams such as Sonos Radio still require internet access on the speakers themselves.
+
+The app stores the last speaker address and selection in local preferences and copies favorite titles and descriptions into a local shared widget cache. The downloadable bundle carries no speaker settings, favorite cache, or Sonos credentials.
 
 ## Build and install with ChatGPT or Claude
 
