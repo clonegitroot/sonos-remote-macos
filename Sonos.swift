@@ -3,6 +3,7 @@ import SwiftUI
 import Darwin
 import MediaPlayer
 import WidgetKit
+import ServiceManagement
 
 struct Room: Identifiable {
     let id: String
@@ -190,6 +191,7 @@ final class Controller: ObservableObject {
     @Published var showArtwork = UserDefaults.standard.bool(forKey: "showArtwork") {
         didSet { UserDefaults.standard.set(showArtwork, forKey: "showArtwork") }
     }
+    @Published private(set) var launchAtLogin = SMAppService.mainApp.status == .enabled
     @Published var transportKnown = false
     @Published var transportActions: Set<String>?
     @Published var busy = false
@@ -198,6 +200,21 @@ final class Controller: ObservableObject {
     @Published var showGrouping = false
     @Published var speakerIP = UserDefaults.standard.string(forKey: "speakerIP") ?? ""
     private var selectedManually = false
+
+    func setLaunchAtLogin(_ enabled: Bool) {
+        do {
+            if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+        } catch {
+            self.error = "Couldn’t update Launch at Login: \(error.localizedDescription)"
+        }
+        let status = SMAppService.mainApp.status
+        if status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
+        launchAtLogin = status == .enabled
+    }
+
+    func refreshLaunchAtLogin() {
+        launchAtLogin = SMAppService.mainApp.status == .enabled
+    }
 
     var group: PlaybackGroup? { groups.first { $0.id == selection } }
     var playing: Bool { playingIDs.contains(selection) }
@@ -528,6 +545,8 @@ struct Controls: View {
                 Menu {
                     Button("Setup & Shortcuts", action: openSetup)
                     Toggle("Show Artwork", isOn: $model.showArtwork)
+                    Toggle("Launch at Login", isOn: Binding(get: { model.launchAtLogin },
+                                                            set: { model.setLaunchAtLogin($0) }))
                     Button(model.showSettings ? "Hide Connection Settings" : "Connection Settings") {
                         model.showSettings.toggle()
                     }
@@ -535,7 +554,7 @@ struct Controls: View {
                     Button("Quit Sonos Remote") { NSApp.terminate(nil) }
                 } label: {
                     Image(systemName: "ellipsis.circle")
-                }.menuStyle(.borderlessButton).menuIndicator(.hidden)
+                }.onAppear { model.refreshLaunchAtLogin() }.menuStyle(.borderlessButton).menuIndicator(.hidden)
                     .fixedSize().accessibilityLabel("Sonos Remote options")
             }
             if let group = model.group {

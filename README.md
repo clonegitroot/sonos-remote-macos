@@ -28,7 +28,7 @@ The previews below use sample rooms, tracks, and favorites.
 
 Requires macOS 14 or later on Apple silicon and a Mac on the same network as your speakers. Build the app with the instructions below, move it to Applications, and open it. In the first-launch setup window, choose **Connect**, then allow **Local Network** access if macOS asks. If discovery fails, enter a Sonos speaker’s IPv4 address and try again. Choose **Done** to finish setup.
 
-To configure global shortcuts, open **… → Setup & Shortcuts** in the menu bar. Choose a modifier combination and a key for each action, or leave it **Off**. Shortcuts target the selected room or group and require no keyboard-monitoring permission. Turn on **… → Show Artwork** to display the current cover in the menu bar. Artwork is off by default.
+To configure global shortcuts, open **… → Setup & Shortcuts** in the menu bar. Choose a modifier combination and a key for each action, or leave it **Off**. Shortcuts target the selected room or group and require no keyboard-monitoring permission. Turn on **… → Show Artwork** to display the current cover in the menu bar. Artwork is off by default. Turn on **… → Launch at Login** to start Sonos Remote when you log in. It then appears under **System Settings → General → Login Items**, where you can also turn it off.
 
 ## Network and privacy
 
