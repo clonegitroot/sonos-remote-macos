@@ -167,14 +167,14 @@ extension Sonos {
         return AudioLevel(volume: min(100, max(0, number)), muted: muteText == "1" || muteText == "true")
     }
 
-    static func nowPlaying(_ host: String) async -> (String, String) {
-        guard let doc = try? await call(host, "AVTransport", "GetPositionInfo", instance) else { return ("", "") }
+    static func nowPlaying(_ host: String) async -> (String, String, URL?) {
+        guard let doc = try? await call(host, "AVTransport", "GetPositionInfo", instance) else { return ("", "", nil) }
         let uri = value(doc, "TrackURI") ?? ""
-        if uri.hasPrefix("x-sonos-htastream:") { return ("TV audio", "") }
-        if uri.hasPrefix("x-rincon-stream:") { return ("Line in", "") }
+        if uri.hasPrefix("x-sonos-htastream:") { return ("TV audio", "", nil) }
+        if uri.hasPrefix("x-rincon-stream:") { return ("Line in", "", nil) }
         guard let metadata = value(doc, "TrackMetaData"),
-              let track = try? XMLDocument(xmlString: metadata, options: [.nodeLoadExternalEntitiesNever]) else { return ("", "") }
-        return (value(track, "title") ?? "", value(track, "creator") ?? value(track, "artist") ?? "")
+              let track = try? XMLDocument(xmlString: metadata, options: [.nodeLoadExternalEntitiesNever]) else { return ("", "", nil) }
+        return (value(track, "title") ?? "", value(track, "creator") ?? value(track, "artist") ?? "", ArtworkCache.url(value(track, "albumArtURI"), host: host))
     }
 }
 
@@ -186,6 +186,10 @@ final class Controller: ObservableObject {
     @Published var levels: [String: AudioLevel] = [:]
     @Published var title = ""
     @Published var artist = ""
+    @Published var artworkURL: URL?
+    @Published var showArtwork = UserDefaults.standard.bool(forKey: "showArtwork") {
+        didSet { UserDefaults.standard.set(showArtwork, forKey: "showArtwork") }
+    }
     @Published var transportKnown = false
     @Published var transportActions: Set<String>?
     @Published var busy = false
@@ -275,6 +279,7 @@ final class Controller: ObservableObject {
         levels = [:]
         title = ""
         artist = ""
+        artworkURL = nil
         transportKnown = false
         await refresh()
     }
@@ -310,7 +315,7 @@ final class Controller: ObservableObject {
             .map { Set($0.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces).lowercased() }) }
         if status == "PLAYING" { playingIDs.insert(group.id) }
         else { playingIDs.remove(group.id) }
-        (title, artist) = await track
+        (title, artist, artworkURL) = await track
         let nowPlaying = MPNowPlayingInfoCenter.default()
         if let status, status == "PLAYING" || status == "PAUSED_PLAYBACK" {
             nowPlaying.nowPlayingInfo = [
@@ -478,6 +483,36 @@ final class VolumeEdit: ObservableObject {
     var editing = false
 }
 
+struct CoverThumbnail: View {
+    let url: URL?
+    @StateObject private var cover = CoverImage()
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8).fill(.quaternary)
+            if let image = cover.image {
+                Image(nsImage: image).resizable().scaledToFill()
+            } else {
+                Image(systemName: "music.note").foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 100, height: 100)
+        .clipShape(.rect(cornerRadius: 8))
+        .accessibilityHidden(true)
+        .task(id: url) {
+            cover.image = nil
+            if let url, let data = await ArtworkCache.shared.thumbnail(url), !Task.isCancelled {
+                cover.image = NSImage(data: data)
+            }
+        }
+    }
+}
+
+@MainActor
+final class CoverImage: ObservableObject {
+    @Published var image: NSImage?
+}
+
 struct Controls: View {
     @ObservedObject var model: Controller
     let openSetup: () -> Void
@@ -492,6 +527,7 @@ struct Controls: View {
                 icon("arrow.clockwise", "Refresh speakers") { await model.discover(force: true) }
                 Menu {
                     Button("Setup & Shortcuts", action: openSetup)
+                    Toggle("Show Artwork", isOn: $model.showArtwork)
                     Button(model.showSettings ? "Hide Connection Settings" : "Connection Settings") {
                         model.showSettings.toggle()
                     }
@@ -511,24 +547,27 @@ struct Controls: View {
                             .tag(group.id)
                     }
                 }.labelsHidden().disabled(model.busy)
-                VStack(spacing: 16) {
-                    VStack(spacing: 4) {
-                        Text(model.title.isEmpty ? (model.playing ? "Playing" : "No track information") : model.title)
-                            .font(.headline).lineLimit(2).multilineTextAlignment(.center)
-                        if !model.artist.isEmpty {
-                            Text(model.artist).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                Group {
+                    if model.showArtwork {
+                        HStack(alignment: .top, spacing: 16) {
+                            CoverThumbnail(url: model.artworkURL)
+                            VStack(alignment: .leading, spacing: 8) {
+                                trackDetails(alignment: .leading)
+                                Spacer(minLength: 0)
+                                playbackControls
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 100, alignment: .leading)
+                            .frame(height: 100)
                         }
+                    } else {
+                        VStack(spacing: 16) {
+                            trackDetails(alignment: .center)
+                            playbackControls
+                        }
+                        .frame(maxWidth: .infinity)
                     }
-                    HStack(spacing: 24) {
-                        icon("backward.fill", "Previous track") { await model.transport("Previous") }
-                            .disabled(!model.supports("Previous"))
-                        icon(model.playing ? "pause.circle.fill" : "play.circle.fill", model.playing ? "Pause" : "Play") {
-                            await model.transport(model.playing ? "Pause" : "Play")
-                        }.font(.system(size: 35)).disabled(!model.supports(model.playing ? "Pause" : "Play"))
-                        icon("forward.fill", "Next track") { await model.transport("Next") }
-                            .disabled(!model.supports("Next"))
-                    }.font(.title3).disabled(!model.transportKnown)
-                }.frame(maxWidth: .infinity).padding(.vertical, 10)
+                }
+                .padding(.vertical, 10)
                 Divider()
                 if let level = model.levels["master"] {
                     VStack(alignment: .leading, spacing: 3) {
@@ -589,6 +628,30 @@ struct Controls: View {
         .task {
             await model.discover()
         }
+    }
+
+    private func trackDetails(alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 4) {
+            Text(model.title.isEmpty ? (model.playing ? "Playing" : "No track information") : model.title)
+                .font(.headline)
+                .lineLimit(2)
+                .multilineTextAlignment(alignment == .leading ? .leading : .center)
+            if !model.artist.isEmpty {
+                Text(model.artist).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+            }
+        }
+    }
+
+    private var playbackControls: some View {
+        HStack(spacing: 24) {
+            icon("backward.fill", "Previous track") { await model.transport("Previous") }
+                .disabled(!model.supports("Previous"))
+            icon(model.playing ? "pause.circle.fill" : "play.circle.fill", model.playing ? "Pause" : "Play") {
+                await model.transport(model.playing ? "Pause" : "Play")
+            }.font(.system(size: 35)).disabled(!model.supports(model.playing ? "Pause" : "Play"))
+            icon("forward.fill", "Next track") { await model.transport("Next") }
+                .disabled(!model.supports("Next"))
+        }.font(.title3).disabled(!model.transportKnown)
     }
 
     func icon(_ symbol: String, _ title: String, action: @escaping () async -> Void) -> some View {
