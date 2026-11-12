@@ -25,6 +25,33 @@ Requires macOS 14 or later on Apple silicon and a Mac on the same network as you
 
 The app connects directly to speakers. It stores the last speaker address and selection in local preferences and copies favorite titles and descriptions into a local shared widget cache. The downloadable bundle carries no speaker settings, favorite cache, or Sonos credentials.
 
+## Build and install with ChatGPT or Claude
+
+Use a coding agent running **locally on the Mac where you want to install the app**. Open a folder you can write to in [Codex](https://learn.chatgpt.com/docs/codex/cli) or start [Claude Code](https://code.claude.com/docs/en/quickstart) in that folder. You still need the [macOS and Xcode prerequisites](BUILD.md#prerequisites). A regular chat or cloud session can explain the commands, but you'll need to run them on your Mac.
+
+Paste this prompt into your local coding agent:
+
+```text
+Build and install Sonos Remote on this Mac from
+https://github.com/clonegitroot/sonos-remote-macos.
+
+Clone the repository into the current folder, or use the existing checkout if
+it's already here. Read README.md and BUILD.md. Check Apple silicon, macOS,
+and the selected Xcode SDK before running ./build.sh. If a prerequisite is
+missing, tell me how to set it up.
+
+Verify the built app and embedded widget signatures. Copy the app to
+/Applications and launch it. Ask before replacing an existing copy, and tell
+me if macOS asks for Local Network access. Check that the menu bar app opens
+and can see my Sonos system. If the widget is available, show me how to add
+it from Edit Widgets.
+
+Keep Gatekeeper enabled. Report any launch, signing, or widget limitation and
+distinguish what you verified from what still needs testing.
+```
+
+The default build uses ad hoc signing. If the widget is missing from **Edit Widgets**, see [Signing and distribution](BUILD.md#signing-and-distribution) for the signed build path.
+
 ## Build
 
 On the tested Mac, WidgetKit excluded the ad hoc build from the widget gallery. The ad hoc ZIP is a local menu bar test build. A widget-enabled distribution build requires separate signing and verification.
