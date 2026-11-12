@@ -12,7 +12,7 @@ cp Info.plist "$app/Contents/Info.plist"
 cp Widget-Info.plist "$ext/Contents/Info.plist"
 cp Remote.icns "$app/Contents/Resources/Remote.icns"
 
-swiftc -parse-as-library -O -module-cache-path "$PWD/build/cache" Sonos.swift Favorites.swift \
+swiftc -parse-as-library -O -module-cache-path "$PWD/build/cache" Sonos.swift Favorites.swift Setup.swift \
   -o "$app/Contents/MacOS/SonosRemote"
 # Start through Foundation's extension bootstrap while keeping Swift's WidgetBundle main.
 swiftc -parse-as-library -application-extension -O -module-cache-path "$PWD/build/cache" Widget.swift Favorites.swift \

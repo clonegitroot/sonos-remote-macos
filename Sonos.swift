@@ -13,9 +13,11 @@ struct Room: Identifiable {
 }
 
 enum SonosError: LocalizedError {
-    case response, noRooms
+    case response, noRooms, rejected(String, Int, String?)
     var errorDescription: String? {
         switch self {
+        case let .rejected(action, status, code):
+            return "Sonos rejected \(action) (\(code.map { "Sonos error \($0)" } ?? "HTTP \(status)"))."
         case .response: return "The speaker didn’t accept the request."
         case .noRooms: return "No Sonos rooms found. Check Wi-Fi and Local Network access, or enter a speaker IP."
         }
@@ -78,7 +80,11 @@ enum Sonos {
         request.setValue("\"\(urn)#\(action)\"", forHTTPHeaderField: "SOAPAction")
         request.httpBody = Data(body.utf8)
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw SonosError.response }
+        guard let http = response as? HTTPURLResponse else { throw SonosError.response }
+        guard http.statusCode == 200 else {
+            let fault = try? XMLDocument(data: data, options: [.nodeLoadExternalEntitiesNever])
+            throw SonosError.rejected(action, http.statusCode, fault.flatMap { value($0, "errorCode") })
+        }
         return try XMLDocument(data: data, options: [.nodeLoadExternalEntitiesNever])
     }
 
@@ -181,6 +187,7 @@ final class Controller: ObservableObject {
     @Published var title = ""
     @Published var artist = ""
     @Published var transportKnown = false
+    @Published var transportActions: Set<String>?
     @Published var busy = false
     @Published var error: String?
     @Published var showSettings = false
@@ -284,6 +291,7 @@ final class Controller: ObservableObject {
         async let audio = Sonos.level(group.host, group.service, group.prefix, group.arguments)
         async let state = Sonos.state(group.host)
         async let track = Sonos.nowPlaying(group.host)
+        async let actions = try? Sonos.call(group.host, "AVTransport", "GetCurrentTransportActions", Sonos.instance)
         var updated = await withTaskGroup(of: (String, AudioLevel?).self, returning: [String: AudioLevel].self) { tasks in
             if group.grouped {
                 for room in group.rooms {
@@ -298,6 +306,8 @@ final class Controller: ObservableObject {
         levels = updated
         let status = await state
         transportKnown = status != nil
+        transportActions = await actions.flatMap { Sonos.value($0, "Actions") }
+            .map { Set($0.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces).lowercased() }) }
         if status == "PLAYING" { playingIDs.insert(group.id) }
         else { playingIDs.remove(group.id) }
         (title, artist) = await track
@@ -331,8 +341,12 @@ final class Controller: ObservableObject {
         }
     }
 
+    func supports(_ action: String) -> Bool {
+        transportKnown && (transportActions?.contains(action.lowercased()) ?? true)
+    }
+
     func transport(_ action: String) async {
-        guard let group else { return }
+        guard let group, supports(action) else { return }
         await perform {
             let speed = action == "Play" ? "<Speed>1</Speed>" : ""
             _ = try await Sonos.call(group.host, "AVTransport", action, Sonos.instance + speed)
@@ -408,6 +422,7 @@ final class Controller: ObservableObject {
                 let change = action == "quieter" ? -5 : 5
                 await adjust(nil, volume: min(100, max(0, volume + change)))
             }
+        case "mute": await adjust(nil)
         case "sync": await syncVolumes()
         default: break
         }
@@ -465,6 +480,7 @@ final class VolumeEdit: ObservableObject {
 
 struct Controls: View {
     @ObservedObject var model: Controller
+    let openSetup: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -475,6 +491,7 @@ struct Controls: View {
                 if model.busy { ProgressView().controlSize(.small) }
                 icon("arrow.clockwise", "Refresh speakers") { await model.discover(force: true) }
                 Menu {
+                    Button("Setup & Shortcuts", action: openSetup)
                     Button(model.showSettings ? "Hide Connection Settings" : "Connection Settings") {
                         model.showSettings.toggle()
                     }
@@ -504,10 +521,12 @@ struct Controls: View {
                     }
                     HStack(spacing: 24) {
                         icon("backward.fill", "Previous track") { await model.transport("Previous") }
+                            .disabled(!model.supports("Previous"))
                         icon(model.playing ? "pause.circle.fill" : "play.circle.fill", model.playing ? "Pause" : "Play") {
                             await model.transport(model.playing ? "Pause" : "Play")
-                        }.font(.system(size: 35))
+                        }.font(.system(size: 35)).disabled(!model.supports(model.playing ? "Pause" : "Play"))
                         icon("forward.fill", "Next track") { await model.transport("Next") }
+                            .disabled(!model.supports("Next"))
                     }.font(.title3).disabled(!model.transportKnown)
                 }.frame(maxWidth: .infinity).padding(.vertical, 10)
                 Divider()
@@ -591,6 +610,26 @@ struct Controls: View {
 final class RemoteDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     let model = Controller()
     private var monitor: Task<Void, Never>?
+    private lazy var shortcuts = Shortcuts(model: model)
+    private var setupWindow: NSWindow?
+
+    func showSetup() {
+        if setupWindow == nil {
+            let window = NSWindow()
+            window.styleMask = [.titled, .closable]
+            window.title = "Sonos Remote Setup"
+            window.isReleasedWhenClosed = false
+            window.contentViewController = NSHostingController(rootView: SetupPanel(model: model, shortcuts: shortcuts) { [weak self] in
+                UserDefaults.standard.set(true, forKey: "completedSetup")
+                self?.setupWindow?.close()
+                self?.startMonitor()
+            })
+            window.center()
+            setupWindow = window
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        setupWindow?.makeKeyAndOrderFront(nil)
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let center = MPRemoteCommandCenter.shared()
@@ -606,6 +645,16 @@ final class RemoteDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                 return .success
             }
         }
+        shortcuts.start()
+        if UserDefaults.standard.bool(forKey: "completedSetup") {
+            startMonitor()
+        } else {
+            showSetup()
+        }
+    }
+
+    private func startMonitor() {
+        guard monitor == nil else { return }
         monitor = Task { [model] in
             await model.discover()
             var ticks = 0
@@ -636,7 +685,7 @@ struct SonosRemote: App {
     @NSApplicationDelegateAdaptor(RemoteDelegate.self) private var delegate
     var body: some Scene {
         MenuBarExtra("Sonos Remote", systemImage: "hifispeaker.2.fill") {
-            Controls(model: delegate.model)
+            Controls(model: delegate.model, openSetup: delegate.showSetup)
         }.menuBarExtraStyle(.window)
     }
 }

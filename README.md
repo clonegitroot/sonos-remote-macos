@@ -4,6 +4,7 @@ A native menu bar remote for Sonos rooms and groups on your local network. An ac
 
 - Play, pause, skip, mute, adjust group and room levels, and add or remove rooms.
 - **Sync Room Volumes** sets each room to the current group level.
+- Configure global shortcuts for volume, mute, play/pause, and track skipping.
 - The Mac media keys work when macOS chooses Sonos Remote as its Now Playing app.
 - Add small, medium, or large desktop widgets from **Edit Widgets**. The large size displays up to five Sonos Favorites.
 
@@ -21,7 +22,9 @@ The previews below use sample rooms, tracks, and favorites.
 
 ## Run locally
 
-Requires macOS 14 or later on Apple silicon and a Mac on the same network as your speakers. Build the app with the instructions below, move it to Applications, and open it. Allow local network access if macOS asks. If discovery fails, enter a Sonos speaker’s IPv4 address in Connection Settings.
+Requires macOS 14 or later on Apple silicon and a Mac on the same network as your speakers. Build the app with the instructions below, move it to Applications, and open it. In the first-launch setup window, choose **Connect**, then allow **Local Network** access if macOS asks. If discovery fails, enter a Sonos speaker’s IPv4 address and try again. Choose **Done** to finish setup.
+
+To configure global shortcuts, open **… → Setup & Shortcuts** in the menu bar. Choose a modifier combination and a key for each action, or leave it **Off**. Shortcuts target the selected room or group and require no keyboard-monitoring permission.
 
 The app connects directly to speakers. It stores the last speaker address and selection in local preferences and copies favorite titles and descriptions into a local shared widget cache. The downloadable bundle carries no speaker settings, favorite cache, or Sonos credentials.
 
