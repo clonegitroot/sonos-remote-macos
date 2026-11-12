@@ -12,13 +12,17 @@ A native menu bar remote for Sonos rooms and groups on your local network. An ac
 
 The previews below use sample rooms, tracks, and favorites.
 
-| Menu bar | Large desktop widget |
+| Menu bar · Artwork on | Menu bar · Artwork off |
 | --- | --- |
-| <img src="docs/images/menu-bar.png" width="330" alt="Sonos Remote menu bar panel with room picker, playback, and volume"> | <img src="docs/images/widget-large.png" width="344" alt="Large Sonos Remote widget with playback and five Sonos Favorites"> |
+| <img src="docs/images/menu-bar-artwork.png" width="330" alt="Menu bar panel with a square cover to the left of the track and playback controls"> | <img src="docs/images/menu-bar.png" width="330" alt="Menu bar panel with centered track details and playback controls"> |
 
 | Small desktop widget | Medium desktop widget |
 | --- | --- |
 | <img src="docs/images/widget-small.png" width="164" alt="Small Sonos Remote widget with playback and volume controls"> | <img src="docs/images/widget-medium.png" width="344" alt="Medium Sonos Remote widget with playback, volume, and room volume sync"> |
+
+**Large desktop widget**
+
+<img src="docs/images/widget-large.png" width="344" alt="Large Sonos Remote widget with playback and five Sonos Favorites">
 
 ## Run locally
 
