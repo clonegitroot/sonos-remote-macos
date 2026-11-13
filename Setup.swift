@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import SwiftUI
 import Carbon
+import ServiceManagement
 
 enum ShortcutAction: String, CaseIterable, Identifiable {
     case louder, quieter, mute, toggle, previous, next
@@ -98,10 +99,37 @@ final class Shortcuts: ObservableObject {
     }
 }
 
+@MainActor
+final class LoginItem: ObservableObject {
+    @Published private(set) var status = SMAppService.mainApp.status
+    @Published private(set) var error: String?
+
+    var enabled: Bool { status == .enabled || status == .requiresApproval }
+
+    func refresh() {
+        status = SMAppService.mainApp.status
+    }
+
+    func setEnabled(_ enabled: Bool) {
+        error = nil
+        do {
+            if enabled {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+        } catch {
+            self.error = error.localizedDescription
+        }
+        refresh()
+    }
+}
+
 struct SetupPanel: View {
     @ObservedObject var model: Controller
     @ObservedObject var shortcuts: Shortcuts
     let done: () -> Void
+    @StateObject private var loginItem = LoginItem()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -140,11 +168,21 @@ struct SetupPanel: View {
                 }
             }
             if let error = shortcuts.error { Text(error).font(.callout).foregroundStyle(.orange) }
+            Divider()
+            Toggle("Launch at Login", isOn: Binding(get: { loginItem.enabled }, set: loginItem.setEnabled))
+            if loginItem.status == .requiresApproval {
+                Button("Approve in Login Items Settings") { SMAppService.openSystemSettingsLoginItems() }
+            }
+            if let error = loginItem.error { Text(error).font(.callout).foregroundStyle(.secondary) }
             HStack {
                 Spacer()
                 Button("Done", action: done).keyboardShortcut(.defaultAction).disabled(model.busy)
             }
         }.padding(24).frame(width: 460)
+            .onAppear { loginItem.refresh() }
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                loginItem.refresh()
+            }
     }
 
     func connect() {

@@ -30,6 +30,8 @@ Requires macOS 14 or later on Apple silicon and a Mac on the same network as you
 
 To configure global shortcuts, open **… → Setup & Shortcuts** in the menu bar. Choose a modifier combination and a key for each action, or leave it **Off**. Shortcuts target the selected room or group and require no keyboard-monitoring permission. Turn on **… → Show Artwork** to display the current cover in the menu bar. Artwork is off by default.
 
+To start Sonos Remote automatically when you sign in to your Mac, turn on **Launch at Login** under **… → Setup & Shortcuts**. It is off by default. If macOS requires approval, choose **Approve in Login Items Settings**.
+
 ## Network and privacy
 
 The menu bar app, desktop widgets, and keyboard shortcuts control your speakers directly over your local network. They don’t use the Sonos cloud API or the Codex Sonos connection. Your Mac needs to be able to reach the speakers locally. Internet streams such as Sonos Radio still require internet access on the speakers themselves. When artwork is enabled, some cover images may load from a music provider over the internet.
